@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CAR//ML</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1>CAR<span>//</span>ML</h1>
+    <p class="tagline">used car price &amp; fuel type prediction system</p>
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="status_text">CONNECTING...</span>
+    </div>
+  </header>
+
+  <!-- STEP 1: MODEL MENU -->
+  <section class="single">
+    <div class="panel">
+      <h2>&gt; STEP 1: SELECT A MODEL</h2>
+      <div class="menu" id="menu"></div>
+    </div>
+  </section>
+
+  <!-- MODEL STATS -->
+  <section class="single" id="stats_section" style="display:none">
+    <div class="panel">
+      <h2 id="stats_title">&gt; MODEL STATS</h2>
+      <p class="model-name" id="stats_type">--</p>
+
+      <!-- shown for the regression model -->
+      <div id="reg_stats">
+        <div class="meter-label"><span>R&sup2; SCORE</span><span id="s_r2">--</span></div>
+        <div class="meter"><div class="meter-fill" id="s_r2_bar"></div></div>
+        <div class="cards">
+          <div class="card"><span class="card-label">AVG ERROR (MAE)</span><span class="card-value" id="s_mae">--</span></div>
+          <div class="card"><span class="card-label">ERROR %</span><span class="card-value" id="s_mape">--</span></div>
+          <div class="card"><span class="card-label">FEATURES</span><span class="card-value" id="s_rfeat">--</span></div>
+          <div class="card"><span class="card-label">TRAIN ROWS</span><span class="card-value" id="s_rtrain">--</span></div>
+          <div class="card"><span class="card-label">TEST ROWS</span><span class="card-value" id="s_rtest">--</span></div>
+          <div class="card"><span class="card-label">LOG R&sup2;</span><span class="card-value" id="s_rlog">--</span></div>
+        </div>
+      </div>
+
+      <!-- shown for the classification models -->
+      <div id="clf_stats">
+        <div class="meter-label"><span>ACCURACY</span><span id="s_acc">--</span></div>
+        <div class="meter"><div class="meter-fill" id="s_acc_bar"></div></div>
+        <div class="cards">
+          <div class="card"><span class="card-label">CORRECT</span><span class="card-value" id="s_correct">--</span></div>
+          <div class="card"><span class="card-label">TEST ROWS</span><span class="card-value" id="s_ctest">--</span></div>
+          <div class="card"><span class="card-label">FEATURES</span><span class="card-value" id="s_cfeat">--</span></div>
+        </div>
+
+        <h3 class="sub">CONFUSION MATRIX (rows = actual, columns = predicted)</h3>
+        <div class="matrix">
+          <div class="cell head"></div>
+          <div class="cell head">Diesel</div>
+          <div class="cell head">Petrol</div>
+
+          <div class="cell head">Diesel</div>
+          <div class="cell good" id="cm00">--</div>
+          <div class="cell bad" id="cm01">--</div>
+
+          <div class="cell head">Petrol</div>
+          <div class="cell bad" id="cm10">--</div>
+          <div class="cell good" id="cm11">--</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: ONE FORM FOR ALL MODELS -->
+  <section class="single">
+    <div class="panel">
+      <h2>&gt; STEP 2: ENTER CAR DETAILS</h2>
+      <p class="hint" id="hint">Select a model above to unlock the form.</p>
+
+      <div class="fields">
+        <div class="field" data-name="year"><label>Year</label><input type="number" value="2015"></div>
+        <div class="field" data-name="selling_price"><label>Selling price (Rs)</label><input type="number" value="450000"></div>
+        <div class="field" data-name="km_driven"><label>Km driven</label><input type="number" value="60000"></div>
+        <div class="field" data-name="fuel"><label>Fuel</label>
+          <select><option>Diesel</option><option>Petrol</option></select></div>
+        <div class="field" data-name="seller_type"><label>Seller type</label>
+          <select><option>Individual</option><option>Dealer</option><option>Trustmark Dealer</option></select></div>
+        <div class="field" data-name="transmission"><label>Transmission</label>
+          <select><option>Manual</option><option>Automatic</option></select></div>
+        <div class="field" data-name="owner"><label>Owner</label>
+          <select><option>First Owner</option><option>Second Owner</option><option>Third Owner</option><option>Fourth &amp; Above Owner</option></select></div>
+        <div class="field" data-name="mileage"><label>Mileage (kmpl)</label><input type="number" value="20"></div>
+        <div class="field" data-name="engine"><label>Engine (CC)</label><input type="number" value="1248"></div>
+        <div class="field" data-name="max_power"><label>Max power (bhp)</label><input type="number" value="74"></div>
+        <div class="field" data-name="seats"><label>Seats</label><input type="number" value="5"></div>
+        <div class="field" data-name="brand"><label>Brand</label><select id="brand_select"></select></div>
+      </div>
+
+      <button id="run_btn" onclick="predict()" disabled>Run Prediction</button>
+      <div class="result" id="result"></div>
+    </div>
+  </section>
+
+  <script>
+    const API = "http://127.0.0.1:8000";
+
+    let models = {};      // filled from the backend
+    let selected = null;  // key of the chosen model
+
+    const brands = [
+      "Maruti", "Hyundai", "Honda", "Toyota", "Ford", "Tata", "Mahindra",
+      "Renault", "Volkswagen", "Skoda", "Nissan", "Chevrolet", "Kia", "Jeep",
+      "MG", "Datsun", "Fiat", "Audi", "BMW", "Mercedes-Benz", "Volvo",
+      "Jaguar", "Land", "Lexus", "Mitsubishi", "Isuzu", "Force", "Opel",
+      "Peugeot", "Daewoo", "Ashok", "Ambassador"
+    ];
+
+    // fill the brand dropdown
+    const brandSelect = document.getElementById("brand_select");
+    brands.forEach(function (brand) {
+      brandSelect.innerHTML += "<option>" + brand + "</option>";
+    });
+
+    // lock or unlock every input; list = the inputs the model needs (null = lock all)
+    function setFields(list) {
+      document.querySelectorAll(".field").forEach(function (box) {
+        const control = box.querySelector("input, select");
+        const name = box.dataset.name;
+
+        if (list === null) {
+          control.disabled = true;
+          box.classList.remove("off");
+        } else if (list.includes(name)) {
+          control.disabled = false;
+          box.classList.remove("off");
+        } else {
+          control.disabled = true;
+          box.classList.add("off");
+        }
+      });
+    }
+
+    setFields(null);
+
+    // ask the backend for all models and build the menu
+    async function loadModels() {
+      try {
+        const response = await fetch(API + "/models");
+        models = await response.json();
+
+        const menu = document.getElementById("menu");
+        menu.innerHTML = "";
+
+        for (const key in models) {
+          const m = models[key];
+          let score = "";
+          if (m.type === "regression") {
+            score = "R\u00B2 " + m.metrics.r2.toFixed(3);
+          } else {
+            score = m.metrics.accuracy.toFixed(1) + "% accuracy";
+          }
+
+          menu.innerHTML +=
+            '<div class="model-card" id="card_' + key + '" onclick="selectModel(\'' + key + '\')">' +
+            '<span class="mc-type">' + m.type + '</span>' +
+            '<span class="mc-name">' + m.name + '</span>' +
+            '<span class="mc-score">' + score + '</span>' +
+            '</div>';
+        }
+
+        document.getElementById("dot").className = "dot online";
+        document.getElementById("status_text").innerText = "API ONLINE";
+      } catch (error) {
+        document.getElementById("dot").className = "dot offline";
+        document.getElementById("status_text").innerText = "API OFFLINE - START UVICORN";
+      }
+    }
+
+    loadModels();
+
+    // runs when you click a model card
+    function selectModel(key) {
+      selected = key;
+      const m = models[key];
+
+      // highlight the chosen card
+      document.querySelectorAll(".model-card").forEach(function (card) {
+        card.classList.remove("active");
+      });
+      document.getElementById("card_" + key).classList.add("active");
+
+      showStats(m);
+
+      // unlock only the inputs this model needs
+      setFields(m.inputs);
+      document.getElementById("run_btn").disabled = false;
+      document.getElementById("hint").innerText =
+        "Using " + m.name + ". Greyed-out fields are not used by this model.";
+      document.getElementById("result").innerText = "";
+    }
+
+    function showStats(m) {
+      document.getElementById("stats_section").style.display = "block";
+      document.getElementById("stats_title").innerText = "> " + m.name.toUpperCase() + " STATS";
+      document.getElementById("stats_type").innerText = m.type + " model";
+
+      const s = m.metrics;
+
+      if (m.type === "regression") {
+        document.getElementById("reg_stats").style.display = "block";
+        document.getElementById("clf_stats").style.display = "none";
+
+        document.getElementById("s_r2").innerText = s.r2.toFixed(3);
+        document.getElementById("s_r2_bar").style.width = (s.r2 * 100) + "%";
+        document.getElementById("s_mae").innerText = "Rs " + Math.round(s.mae).toLocaleString();
+        document.getElementById("s_mape").innerText = s.mape.toFixed(1) + "%";
+        document.getElementById("s_rfeat").innerText = s.features;
+        document.getElementById("s_rtrain").innerText = s.train_rows.toLocaleString();
+        document.getElementById("s_rtest").innerText = s.test_rows.toLocaleString();
+        document.getElementById("s_rlog").innerText = s.r2_log.toFixed(3);
+      } else {
+        document.getElementById("reg_stats").style.display = "none";
+        document.getElementById("clf_stats").style.display = "block";
+
+        document.getElementById("s_acc").innerText = s.accuracy.toFixed(1) + "%";
+        document.getElementById("s_acc_bar").style.width = s.accuracy + "%";
+        document.getElementById("s_correct").innerText = s.correct.toLocaleString();
+        document.getElementById("s_ctest").innerText = s.test_rows.toLocaleString();
+        document.getElementById("s_cfeat").innerText = s.features;
+
+        document.getElementById("cm00").innerText = s.confusion_matrix[0][0];
+        document.getElementById("cm01").innerText = s.confusion_matrix[0][1];
+        document.getElementById("cm10").innerText = s.confusion_matrix[1][0];
+        document.getElementById("cm11").innerText = s.confusion_matrix[1][1];
+      }
+    }
+
+    // runs when you click Run Prediction
+    async function predict() {
+      const m = models[selected];
+      const resultBox = document.getElementById("result");
+
+      // collect only the inputs the model uses (disabled ones are skipped)
+      const data = {};
+      document.querySelectorAll(".field").forEach(function (box) {
+        const control = box.querySelector("input, select");
+        if (!control.disabled) {
+          if (control.type === "number") {
+            data[box.dataset.name] = Number(control.value);
+          } else {
+            data[box.dataset.name] = control.value;
+          }
+        }
+      });
+
+      let url = "";
+      if (m.type === "regression") {
+        url = API + "/predict/regression";
+      } else {
+        url = API + "/predict/classification";
+        data.algorithm = selected;   // tell the backend which classifier to use
+      }
+
+      resultBox.innerText = "computing...";
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+        const result = await response.json();
+
+        if (m.type === "regression") {
+          resultBox.innerText = "Estimated price: Rs " + result.predicted_price.toLocaleString();
+        } else {
+          resultBox.innerText = "Predicted fuel type: " + result.predicted_fuel + "  (" + m.name + ")";
+        }
+      } catch (error) {
+        resultBox.innerText = "Error: could not reach the backend.";
+      }
+    }
+  </script>
+
+</body>
+</html>
